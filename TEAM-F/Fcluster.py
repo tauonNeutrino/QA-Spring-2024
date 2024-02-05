@@ -29,7 +29,7 @@ def create_qubo(num_tracks, num_vertices, m):
     # Define QUBO terms for the first summation
     for k in range(num_vertices):
       for i in range(num_tracks):
-        for j in range(i, num_tracks):
+        for j in range(i+1, num_tracks):
           distance = abs(zT_i[i] - zT_i[j]) / (zT_unc_i[i]**2 + zT_unc_i[j]**2)**.5
           distance_list.append(distance)
           qubo[(i+num_tracks*k, j+num_tracks*k)] = 1-math.exp(-m*(distance))
@@ -42,9 +42,9 @@ def create_qubo(num_tracks, num_vertices, m):
 
       for k in range(num_vertices):
         # for both products of -pik*1
-        qubo[(i+num_tracks*k,i+num_tracks*k)] -= 2*L
+        qubo[(i+num_tracks*k,i+num_tracks*k)] -= L
 
-        for l in range(k, num_vertices):
+        for l in range(k+1, num_vertices):
           # for both products of -pik*-pij
           qubo[(i+num_tracks*k, i+num_tracks*l)] += 2*L
 
