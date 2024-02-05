@@ -7,8 +7,7 @@ import dwave.inspector
 
 # this is to import and process simulated data
 
-# Use the absolute file path just because
-inputFile = open('/workspaces/codespaces-jupyter/clustering_data/2Vertices_10Tracks_100Samples/2Vertices_10Tracks_Event10/serializedEvents.json')
+inputFile = open('../clustering_data/2Vertices_10Tracks_100Samples/2Vertices_10Tracks_Event10/serializedEvents.json')
 d_vertextracks = json.load(inputFile)
 zT_i = []
 zT_unc_i = []
