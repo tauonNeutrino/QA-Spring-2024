@@ -5,6 +5,7 @@ from mpl_toolkits import mplot3d
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 import numpy as np
 
@@ -38,6 +39,7 @@ df[['x_t', 'y_t', 'z_t']] = scaler.fit_transform(df[['x', 'y', 'z']])
 def optimum_k_means(data, max_k):
     means = []
     inertias = []
+    sil = []
 
     for k in range(1, max_k):
         kmeans = KMeans(n_clusters=k)
@@ -45,11 +47,20 @@ def optimum_k_means(data, max_k):
 
         means.append(k)
         inertias.append(kmeans.inertia_)
-    
+
         print(f"{k}: {(inertias[k-1] - inertias[k-2])}")
 
-    #for k in range(0, max_k - 1):
-        #if (abs(inertias[k] - inertias[k-1]) < )
+    # Calculate Silhouette Scores
+
+    for k in range(2, max_k + 1):
+        kmeans = KMeans(n_clusters = k).fit(data)
+        labels = kmeans.labels_
+        sil.append(silhouette_score(data, labels, metric = 'euclidean'))
+
+    print("\nSilhouette Score")
+    print(sil)
+    max_sil_k = sil.index(max(sil)) + 1
+    print(f"{max_sil_k} : {max(sil)}")
 
     #Generate elbow plot
     fig = plt.subplots(figsize=(10, 5))
@@ -73,7 +84,7 @@ ax = plt.axes(projection='3d')
 ax.grid()
 
 ax.scatter(df['x'], df['y'], df['z'], c = df['kmeans_7'], s = 50)
-ax.set_title('3D Scatter Plot')
+ax.set_title('CMS Clustering')
 
 # Set axes label
 ax.set_xlabel('x', labelpad=20)
