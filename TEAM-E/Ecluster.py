@@ -86,15 +86,15 @@ if __name__ == "__main__":
 
 	qubo = create_qubo(Z, deltaZ, 
 					nT, nV, m = 5)
-	print(qubo)
+	#print(qubo)
 
 
 	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
-	sampler = EmbeddingComposite(DWaveSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320'))
+	sampler = EmbeddingComposite(DWaveSampler(token='DEV-754a213785424e0b988b54a1614c70f03ed5d88f'))
 	response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
 
 	# Show the problem in inspector, to see chain lengths and solution distribution
-	dwave.inspector.show(response)
+	#dwave.inspector.show(response)
 
 	for sample in response:
 		print("Best Solution:")
