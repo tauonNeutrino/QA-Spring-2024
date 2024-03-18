@@ -66,13 +66,62 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 
 	return qubo
 
+
+# %%
+
+def plot_solution(Z, nT, nV, solution):
+	print(Z)
+	from matplotlib import pyplot as plt
+	import numpy as np
+	plt.figure()
+	# plt.hlines(1, min(Z),max(Z))  # Draw a horizontal line
+
+	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
+
+	print(solution)
+
+	track_to_vertex = [None] * nT
+
+	for num, bool in solution.items():
+		if bool == 1:
+			i = num % nT # track number
+			k = num // nT # vertex number
+
+			if track_to_vertex[i] != None:
+				print("Invalid solution! Track assigned to multiple vertices.")
+				return
+			else:
+				track_to_vertex[i] = k
+
+	# print(track_to_vertex)
+	
+	if None in track_to_vertex:
+		print("Invalid solution! Track assigned to no vertex :(")
+		return
+
+	vertex_to_Zs = [[] for _ in range(nV)]
+	for track, vertex in enumerate(track_to_vertex):
+		vertex_to_Zs[vertex].append(Z[track])
+
+	print(vertex_to_Zs)
+
+	# print(len(Z), len(colorlist))
+
+	plt.eventplot(vertex_to_Zs, orientation='horizontal', colors=palette[:nV], linewidths=1)
+	# plt.axis('off')
+	plt.yticks([])
+	plt.show()
+
+
+
 # %%
 
 if __name__ == "__main__":
-	nT = 16
-	nV = 4
+
+	nV = 2
+	nT = 10
 	EVT = 9
-	data_file = f'clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
+	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
 	Z = []
 	deltaZ = []
@@ -82,7 +131,6 @@ if __name__ == "__main__":
 			for z, delta_z in tracks:
 				Z.append(z)
 				deltaZ.append(delta_z)
-
 
 	qubo = create_qubo(Z, deltaZ, 
 					nT, nV, m = 5)
@@ -96,7 +144,13 @@ if __name__ == "__main__":
 	# Show the problem in inspector, to see chain lengths and solution distribution
 	dwave.inspector.show(response)
 
+	print(response)
+
 	for sample in response:
 		print("Best Solution:")
 		print(sample)
 		break  # Exit after printing the first sample
+
+	best = response.first.sample
+	print(best)
+	plot_solution(Z, nT, nV, best)
