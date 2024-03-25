@@ -15,7 +15,8 @@ def g(m, Dij):
 	The purpose of this function is to scale the energy levels
 	so that the lowest levels are more separated from each other.
 	"""
-	return 1 - math.exp(-m*Dij)
+	return Dij
+	# return 1 - math.exp(-m*Dij)
 
 def create_qubo(Z, deltaZ, nT, nV, m = 5):
 	"""
@@ -43,6 +44,14 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 	Reference: page 3, http://web3.arxiv.org/pdf/1903.08879.pdf
 	"""
 
+	print("Z =", Z)
+	print("deltaZ =", deltaZ)
+	print("nT =", nT)
+	print("nV =", nV)
+	print("m =", m)
+
+	# print(nT, nV, m)
+
 	qubo = defaultdict(float)
 	Dij_max = 0
 
@@ -54,7 +63,9 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 				Dij_max = max(Dij_max, Dij)
 				qubo[(i+nT*k, j+nT*k)] = g(m, Dij) #q(ik, jk)
 
-	lam = 1.2 * Dij_max
+	print("Dij_max", Dij_max, "Max before constraint", get_max_coeff(qubo))
+	# lam = 1.2 * Dij_max
+	lam = 0.5 * Dij_max
 
 	# Define QUBO terms for penalty summation
 	# Note, we ignore a constant 1 as it does not affect the optimization
@@ -66,6 +77,8 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 
 	return qubo
 
+def get_max_coeff(mydict):
+	return max([abs(v) for v in mydict.values()])
 
 # %%
 
@@ -118,8 +131,8 @@ def plot_solution(Z, nT, nV, solution):
 
 if __name__ == "__main__":
 
-	nV = 2
-	nT = 10
+	nV = 4
+	nT = 12
 	EVT = 9
 	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
@@ -133,13 +146,20 @@ if __name__ == "__main__":
 				deltaZ.append(delta_z)
 
 	qubo = create_qubo(Z, deltaZ, 
-					nT, nV, m = 5)
+					nT, nV, m = .0001)
 	print(qubo)
+	strength = get_max_coeff(qubo)
+
+	print("Max strength", strength)
 
 
 	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
 	sampler = EmbeddingComposite(DWaveSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320'))
-	response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
+	# response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
+
+
+	response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=strength, annealing_time = 2000)
+
 
 	# Show the problem in inspector, to see chain lengths and solution distribution
 	dwave.inspector.show(response)
@@ -154,3 +174,5 @@ if __name__ == "__main__":
 	best = response.first.sample
 	print(best)
 	plot_solution(Z, nT, nV, best)
+
+# %%
