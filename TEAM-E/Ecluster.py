@@ -6,6 +6,8 @@ import math
 from collections import defaultdict
 from dwave.system import LeapHybridSampler, DWaveSampler, EmbeddingComposite
 import dwave.inspector
+from matplotlib import pyplot as plt
+import numpy as np
 
 #%%
 
@@ -15,7 +17,8 @@ def g(m, Dij):
 	The purpose of this function is to scale the energy levels
 	so that the lowest levels are more separated from each other.
 	"""
-	return Dij ** 0.5
+	# return Dij ** 0.25 + Dij ** 0.5
+	return math.log(Dij)
 	# return 1 - math.exp(-m*Dij)
 
 def create_qubo(Z, deltaZ, nT, nV, m = 5):
@@ -65,7 +68,7 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 
 	print("Dij_max", Dij_max, "Max before constraint", get_max_coeff(qubo))
 	# lam = 1.2 * Dij_max
-	lam = 1.2 * g(0, Dij_max)
+	lam = 1.0 * g(0, Dij_max)
 
 	# Define QUBO terms for penalty summation
 	# Note, we ignore a constant 1 as it does not affect the optimization
@@ -84,8 +87,6 @@ def get_max_coeff(mydict):
 
 def plot_solution(Z, nT, nV, solution):
 	print(Z)
-	from matplotlib import pyplot as plt
-	import numpy as np
 	plt.figure()
 	# plt.hlines(1, min(Z),max(Z))  # Draw a horizontal line
 
@@ -132,8 +133,8 @@ def plot_solution(Z, nT, nV, solution):
 if __name__ == "__main__":
 
 	nV = 4
-	nT = 12
-	EVT = 9
+	nT = 16
+	EVT = 2
 	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
 	Z = []
@@ -148,7 +149,7 @@ if __name__ == "__main__":
 	qubo = create_qubo(Z, deltaZ, 
 					nT, nV, m = .0001)
 	print(qubo)
-	strength = get_max_coeff(qubo)
+	strength = math.ceil(get_max_coeff(qubo))
 
 	print("Max strength", strength)
 
