@@ -15,7 +15,7 @@ def g(m, Dij):
 	The purpose of this function is to scale the energy levels
 	so that the lowest levels are more separated from each other.
 	"""
-	return Dij
+	return Dij ** 0.5
 	# return 1 - math.exp(-m*Dij)
 
 def create_qubo(Z, deltaZ, nT, nV, m = 5):
@@ -65,7 +65,7 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 
 	print("Dij_max", Dij_max, "Max before constraint", get_max_coeff(qubo))
 	# lam = 1.2 * Dij_max
-	lam = 0.5 * Dij_max
+	lam = 1.2 * g(0, Dij_max)
 
 	# Define QUBO terms for penalty summation
 	# Note, we ignore a constant 1 as it does not affect the optimization
