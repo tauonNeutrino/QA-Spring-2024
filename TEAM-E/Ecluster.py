@@ -68,7 +68,7 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 
 	print("Dij_max", Dij_max, "Max before constraint", get_max_coeff(qubo))
 	# lam = 1.2 * Dij_max
-	lam = 1.0 * g(0, Dij_max)
+	lam = 1.0 * g(0, Dij_max) # was 1.0
 
 	# Define QUBO terms for penalty summation
 	# Note, we ignore a constant 1 as it does not affect the optimization
@@ -132,8 +132,8 @@ def plot_solution(Z, nT, nV, solution):
 
 if __name__ == "__main__":
 
-	nV = 4
-	nT = 16
+	nV = 5
+	nT = 15
 	EVT = 2
 	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
@@ -159,7 +159,7 @@ if __name__ == "__main__":
 	# response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
 
 
-	response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=strength, annealing_time = 2000)
+	response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=strength, annealing_time = 50)
 
 
 	# Show the problem in inspector, to see chain lengths and solution distribution
