@@ -18,10 +18,10 @@ def g(m, Dij):
 	so that the lowest levels are more separated from each other.
 	"""
 	# return Dij ** 0.25 + Dij ** 0.5
-	return math.log(Dij)
+	return math.log(m * Dij) # good m values: 0.6, 0.5, 1.0
 	# return 1 - math.exp(-m*Dij)
 
-def create_qubo(Z, deltaZ, nT, nV, m = 5):
+def create_qubo(Z, deltaZ, nT, nV, m = 1):
 	"""
 	Creates a QUBO (Quadratic Unconstrained Binary Optimization) matrix based on the given parameters.
 
@@ -68,7 +68,7 @@ def create_qubo(Z, deltaZ, nT, nV, m = 5):
 
 	print("Dij_max", Dij_max, "Max before constraint", get_max_coeff(qubo))
 	# lam = 1.2 * Dij_max
-	lam = 1.0 * g(0, Dij_max) # was 1.0
+	lam = 1.0 * g(m, Dij_max) # was 1.0
 
 	# Define QUBO terms for penalty summation
 	# Note, we ignore a constant 1 as it does not affect the optimization
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
 	nV = 5
 	nT = 15
-	EVT = 2
+	EVT = 49
 	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
 	Z = []
@@ -147,7 +147,7 @@ if __name__ == "__main__":
 				deltaZ.append(delta_z)
 
 	qubo = create_qubo(Z, deltaZ, 
-					nT, nV, m = .0001)
+					nT, nV, m = 0.5/(nV**0.5))
 	print(qubo)
 	strength = math.ceil(get_max_coeff(qubo))
 
