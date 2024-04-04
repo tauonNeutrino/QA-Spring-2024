@@ -162,7 +162,6 @@ def create_qubo(Z, T, P, nT, nV, m = 1):
 	return qubo
 
 def get_max_coeff(mydict):
-	print([abs(v) for v in mydict.values()])
 	return max([abs(v) for v in mydict.values()])
 
 def angle_diff(a, b):
@@ -266,10 +265,10 @@ def plot_solution2(Z, T, P, nT, nV, solution):
 	print(vertex_to_Zs)
 	print(vertex_to_Thetas)
 	print(vertex_to_Ps)
-	vertex_to_Ps = [[10 * p ** 0.3 for p in ps] for ps in vertex_to_Ps]
+	vertex_to_Ps = [[40 * p ** 0.5 for p in ps] for ps in vertex_to_Ps]
 	plt.figure()
 	for i in range(nV):
-		plt.scatter(vertex_to_Zs[i], vertex_to_Thetas[i], c=palette[i], s=vertex_to_Ps[i], alpha=0.7)
+		plt.scatter(vertex_to_Zs[i], vertex_to_Thetas[i], c=palette[i], s=vertex_to_Ps[i], alpha=0.5)
  
 
 
