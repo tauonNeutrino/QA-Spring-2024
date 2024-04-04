@@ -5,6 +5,7 @@ import dimod
 import math
 from collections import defaultdict
 from dwave.system import LeapHybridSampler, DWaveSampler, EmbeddingComposite
+# import dwavebinarycsp
 import dwave.inspector
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,8 +31,8 @@ def generate_clusters():
 	p /= p.max()
 	n = sum(p > 0.3)
 	print(n)
-	# if n > 5 or n < 2:
-	if n != 2: # just for now
+	if n > 5 or n < 2:
+	# if n != 5: # just for now
 		return generate_clusters()
 	
 	p = np.sort(p)[::-1].tolist()
@@ -87,13 +88,18 @@ def g(m, Dij):
 	# print("Dij", Dij)
 
 	# return 1
+ 
+	# w = -math.cos(math.pi * Dij) # close to 1 when Dij is close to 0, close to -1 when Dij is close to 1
+	# w += -math.tanh(Dij ** 0.5) * 0.1
+	# return w
+
 
 	# Dij -= 2
 	# Dij *= 5
 	# print("Dij =", Dij)
 	# return math.log(Dij)
 	# return Dij
-	return 1 + math.log(Dij)
+	return 1 + math.log(Dij*m)
 	# return Dij ** 0.25 + Dij ** 0.5
 	# return m + math.log(Dij)
 	# m = 5
@@ -136,7 +142,7 @@ def create_qubo(Z, T, P, nT, nV, m = 1):
 				# Dij_max = max(Dij_max, Dij)
 	
 				# modulo 1.0 so we can compare angles (which have been normalized to [0, 1])
-				Dij = ((Z[i] - Z[j])**2 + ((T[i] - T[j]) % 1.0)**2) ** 0.5
+				Dij = ((Z[i] - Z[j])**2 + (angle_diff(T[i], T[j]) % 1.0)**2) ** 0.5
 				Dij_max = max(Dij_max, Dij)
 				qubo[(i+nT*k, j+nT*k)] = g(m, Dij) # * (P[i] + P[j]) # prevent high momentum tracks from being assigned to same vertex
 
@@ -158,6 +164,27 @@ def create_qubo(Z, T, P, nT, nV, m = 1):
 def get_max_coeff(mydict):
 	print([abs(v) for v in mydict.values()])
 	return max([abs(v) for v in mydict.values()])
+
+def angle_diff(a, b):
+	return 2*abs((a - b + 0.5) % 1.0 - 0.5)
+
+# %%
+
+# def create_bqm(Z, T, P, nT, nV, m = 1):
+# 	max_dist = get_max_distance(Z, T)
+# 	csp = dwavebinarycsp.ConstraintSatisfactionProblem(dwavebinarycsp.BINARY)
+# 	csp.add_constraint()
+# 	pass
+
+# def get_distance(Z_i, T_i, Z_j, T_j):
+# 	return ((Z_i - Z_j)**2 + ((T_i - T_j) % 1.0)**2) ** 0.5
+
+# def get_max_distance(Z, T):
+# 	max_distance = 0
+# 	for i in range(len(Z)):
+# 		for j in range(i+1, len(Z)):
+# 			max_distance = max(max_distance, get_distance(Z[i], T[i], Z[j], T[j]))
+# 	return max_distance
 
 # %%
 
@@ -272,7 +299,7 @@ if __name__ == "__main__":
 	T = all_thetas
 	P = all_ps
 
-	qubo = create_qubo(Z, T, P, nT, nV)
+	qubo = create_qubo(Z, T, P, nT, nV, m=nV-1)
 
 	print(qubo)
 	strength = math.ceil(get_max_coeff(qubo))
@@ -294,7 +321,7 @@ if __name__ == "__main__":
 	# response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
 
 
-	response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=strength, annealing_time = 50)
+	response = sampler.sample_qubo(qubo, num_reads=100, chain_strength=strength, annealing_time = 50)
 
 
 	# Show the problem in inspector, to see chain lengths and solution distribution
