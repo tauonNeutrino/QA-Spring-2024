@@ -6,8 +6,67 @@ import math
 from collections import defaultdict
 from dwave.system import LeapHybridSampler, DWaveSampler, EmbeddingComposite
 import dwave.inspector
-from matplotlib import pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+
+#%%
+
+def get_rand_from(v):
+	elem = v[np.random.randint(len(v))]
+	v.remove(elem)
+	return elem
+
+# based on https://arxiv.org/pdf/1405.6569.pdf
+def generate_clusters():
+
+	z_range = 1 # +- 1
+	theta_range = 1 # +- 1 (we're acting like we squished the ranges)
+	num_tracks = 12
+
+	stdev = 0.01
+
+	p = np.random.rand(num_tracks)
+	p = .1/(p**2 + 0.01) # some p distribution I made up
+	p /= p.max()
+	n = sum(p > 0.3)
+	print(n)
+	if n > 5 or n < 2:
+		return generate_clusters()
+	
+	p = np.sort(p)[::-1].tolist()
+
+	hard_ps = p[:n]
+	soft_ps = p[n:]
+
+	vertex_zs = (2 * np.random.rand(n) - 1) * z_range
+	vertex_thetas = np.random.rand(n) * theta_range
+
+	points_per_cluster = (num_tracks // n) - 1 # -1 because we're going to add the vertex itself
+
+	all_zs = []
+	all_thetas = []
+	all_ps = []
+	for i in range(n):
+		z = vertex_zs[i]
+		theta = vertex_thetas[i]
+		for j in range(points_per_cluster):
+			all_zs.append(z + np.random.normal(scale=stdev))
+			all_thetas.append(theta + np.random.normal(scale=stdev))
+			all_ps.append(get_rand_from(soft_ps))
+		all_zs.append(z)
+		all_thetas.append(theta)
+		all_ps.append(get_rand_from(hard_ps))
+	# all_zs = np.array(all_zs)
+	# all_thetas = np.array(all_thetas)
+	return (n, all_zs, all_thetas, all_ps)
+
+def plot_clusters(n, all_zs, all_thetas, all_ps):
+	plt.scatter(all_zs, all_thetas, c=all_ps)
+
+result = generate_clusters()
+print(result)
+plot_clusters(*result)
+
 
 #%%
 
@@ -46,14 +105,6 @@ def create_qubo(Z, deltaZ, nT, nV, m = 1):
 	Note: The QUBO matrix is represented as a defaultdict with default value 0. The non-zero elements represent the QUBO terms.
 	Reference: page 3, http://web3.arxiv.org/pdf/1903.08879.pdf
 	"""
-
-	print("Z =", Z)
-	print("deltaZ =", deltaZ)
-	print("nT =", nT)
-	print("nV =", nV)
-	print("m =", m)
-
-	# print(nT, nV, m)
 
 	qubo = defaultdict(float)
 	Dij_max = 0
@@ -131,10 +182,9 @@ def plot_solution(Z, nT, nV, solution):
 # %%
 
 if __name__ == "__main__":
-
-	nV = 5
-	nT = 15
-	EVT = 49
+	nT = 16
+	nV = 4
+	EVT = 9
 	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
 	Z = []
