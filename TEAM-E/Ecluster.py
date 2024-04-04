@@ -19,8 +19,8 @@ def get_rand_from(v):
 # based on https://arxiv.org/pdf/1405.6569.pdf
 def generate_clusters():
 
-	z_range = 1 # +- 1
-	theta_range = 1 # +- 1 (we're acting like we squished the ranges)
+	z_range = 1 # 0 to 1
+	theta_range = 1 # 0 to 1 (we're acting like we squished the ranges)
 	num_tracks = 12
 
 	stdev = 0.01
@@ -30,7 +30,8 @@ def generate_clusters():
 	p /= p.max()
 	n = sum(p > 0.3)
 	print(n)
-	if n > 5 or n < 2:
+	# if n > 5 or n < 2:
+	if n != 2: # just for now
 		return generate_clusters()
 	
 	p = np.sort(p)[::-1].tolist()
@@ -38,7 +39,7 @@ def generate_clusters():
 	hard_ps = p[:n]
 	soft_ps = p[n:]
 
-	vertex_zs = (2 * np.random.rand(n) - 1) * z_range
+	vertex_zs = np.random.rand(n) * z_range
 	vertex_thetas = np.random.rand(n) * theta_range
 
 	points_per_cluster = (num_tracks // n) - 1 # -1 because we're going to add the vertex itself
@@ -64,8 +65,14 @@ def plot_clusters(n, all_zs, all_thetas, all_ps):
 	plt.scatter(all_zs, all_thetas, c=all_ps)
 
 result = generate_clusters()
-print(result)
+# print(result)
 plot_clusters(*result)
+
+(n, all_zs, all_thetas, all_ps) = result
+
+print(all_zs, len(all_zs))
+print(all_thetas, len(all_thetas))
+print(all_ps, len(all_ps))
 
 
 #%%
@@ -76,11 +83,23 @@ def g(m, Dij):
 	The purpose of this function is to scale the energy levels
 	so that the lowest levels are more separated from each other.
 	"""
+
+	# print("Dij", Dij)
+
+	# return 1
+
+	# Dij -= 2
+	# Dij *= 5
+	# print("Dij =", Dij)
+	# return math.log(Dij)
+	# return Dij
+	return 1 + math.log(Dij)
 	# return Dij ** 0.25 + Dij ** 0.5
-	return math.log(m * Dij) # good m values: 0.6, 0.5, 1.0
+	# return m + math.log(Dij)
+	# m = 5
 	# return 1 - math.exp(-m*Dij)
 
-def create_qubo(Z, deltaZ, nT, nV, m = 1):
+def create_qubo(Z, T, P, nT, nV, m = 1):
 	"""
 	Creates a QUBO (Quadratic Unconstrained Binary Optimization) matrix based on the given parameters.
 
@@ -113,13 +132,18 @@ def create_qubo(Z, deltaZ, nT, nV, m = 1):
 	for k in range(nV):
 		for i in range(nT):
 			for j in range(i+1, nT):
-				Dij = abs(Z[i] - Z[j]) / (deltaZ[i]**2 + deltaZ[j]**2)**.5
+				# Dij = abs(Z[i] - Z[j]) / (deltaZ[i]**2 + deltaZ[j]**2)**.5
+				# Dij_max = max(Dij_max, Dij)
+	
+				# modulo 1.0 so we can compare angles (which have been normalized to [0, 1])
+				Dij = ((Z[i] - Z[j])**2 + ((T[i] - T[j]) % 1.0)**2) ** 0.5
 				Dij_max = max(Dij_max, Dij)
-				qubo[(i+nT*k, j+nT*k)] = g(m, Dij) #q(ik, jk)
+				qubo[(i+nT*k, j+nT*k)] = g(m, Dij) # * (P[i] + P[j]) # prevent high momentum tracks from being assigned to same vertex
 
 	print("Dij_max", Dij_max, "Max before constraint", get_max_coeff(qubo))
 	# lam = 1.2 * Dij_max
-	lam = 1.0 * g(m, Dij_max) # was 1.0
+	# lam = 1.0 * g(m, Dij_max) # was 1.0
+	lam = 1.0 * get_max_coeff(qubo)
 
 	# Define QUBO terms for penalty summation
 	# Note, we ignore a constant 1 as it does not affect the optimization
@@ -132,10 +156,12 @@ def create_qubo(Z, deltaZ, nT, nV, m = 1):
 	return qubo
 
 def get_max_coeff(mydict):
+	print([abs(v) for v in mydict.values()])
 	return max([abs(v) for v in mydict.values()])
 
 # %%
 
+# one dimensional solution plotter.
 def plot_solution(Z, nT, nV, solution):
 	print(Z)
 	plt.figure()
@@ -177,31 +203,90 @@ def plot_solution(Z, nT, nV, solution):
 	plt.yticks([])
 	plt.show()
 
+def plot_solution2(Z, T, P, nT, nV, solution):
+
+	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
+
+	print(solution)
+
+	track_to_vertex = [None] * nT
+
+	for num, bool in solution.items():
+		if bool == 1:
+			i = num % nT # track number
+			k = num // nT # vertex number
+
+			if track_to_vertex[i] != None:
+				print("Invalid solution! Track assigned to multiple vertices.")
+				return
+			else:
+				track_to_vertex[i] = k
+
+	# print(track_to_vertex)
+	
+	if None in track_to_vertex:
+		print("Invalid solution! Track assigned to no vertex :(")
+		return
+
+	vertex_to_Zs = [[] for _ in range(nV)]
+	vertex_to_Thetas = [[] for _ in range(nV)]
+	vertex_to_Ps = [[] for _ in range(nV)]
+	for track, vertex in enumerate(track_to_vertex):
+		vertex_to_Zs[vertex].append(Z[track])
+		vertex_to_Thetas[vertex].append(T[track])
+		vertex_to_Ps[vertex].append(P[track])
+
+	print(vertex_to_Zs)
+	print(vertex_to_Thetas)
+	print(vertex_to_Ps)
+	vertex_to_Ps = [[10 * p ** 0.3 for p in ps] for ps in vertex_to_Ps]
+	plt.figure()
+	for i in range(nV):
+		plt.scatter(vertex_to_Zs[i], vertex_to_Thetas[i], c=palette[i], s=vertex_to_Ps[i], alpha=0.7)
+ 
 
 
 # %%
 
 if __name__ == "__main__":
-	nT = 16
-	nV = 4
-	EVT = 9
-	data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
+	# nT = 16
+	# nV = 4
+	# EVT = 9
+	# data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
 	
-	Z = []
-	deltaZ = []
+	# Z = []
+	# deltaZ = []
 
-	with open(data_file, 'r') as inputFile:
-		for primary_vertex, tracks in json.load(inputFile):
-			for z, delta_z in tracks:
-				Z.append(z)
-				deltaZ.append(delta_z)
+	# with open(data_file, 'r') as inputFile:
+	# 	for primary_vertex, tracks in json.load(inputFile):
+	# 		for z, delta_z in tracks:
+	# 			Z.append(z)
+	# 			deltaZ.append(delta_z)
 
-	qubo = create_qubo(Z, deltaZ, 
-					nT, nV, m = 0.5/(nV**0.5))
+	# qubo = create_qubo(Z, deltaZ, 
+	# 				nT, nV, m = 0.5/(nV**0.5))
+ 
+	nT = len(all_zs)
+	nV = n
+	Z = all_zs
+	T = all_thetas
+	P = all_ps
+
+	qubo = create_qubo(Z, T, P, nT, nV)
+
 	print(qubo)
 	strength = math.ceil(get_max_coeff(qubo))
 
 	print("Max strength", strength)
+
+	# print("Z =", Z)
+	# print("T =", T)
+	# print("P =", P)
+	# print("nV =", nV)
+	# print("nT =", nT)
+	# print("m =", m)
+
+	# print(nT, nV, m)
 
 
 	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
@@ -217,13 +302,20 @@ if __name__ == "__main__":
 
 	print(response)
 
+	idx = 0
+
 	for sample in response:
-		print("Best Solution:")
+		idx += 1
+		# print("Best Solution:")
+  		# plot_solution2(Z, T, P, nT, nV, sample)
 		print(sample)
+		# if idx > 5:
+		# 	break
 		break  # Exit after printing the first sample
 
 	best = response.first.sample
 	print(best)
-	plot_solution(Z, nT, nV, best)
+	plot_solution2(Z, T, P, nT, nV, best)
+	
 
 # %%
