@@ -17,7 +17,7 @@ def get_rand_from(v):
 	v.remove(elem)
 	return elem
 
-# based on https://arxiv.org/pdf/1405.6569.pdf
+# maybe base this on https://arxiv.org/pdf/1405.6569.pdf in the future
 def generate_clusters():
 
 	z_range = 1 # 0 to 1
