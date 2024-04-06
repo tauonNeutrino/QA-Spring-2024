@@ -10,6 +10,7 @@ import dwave.inspector
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics.cluster import rand_score
+import pandas as pd
 
 #%%
 
@@ -18,15 +19,24 @@ def get_rand_from(v):
 	v.remove(elem)
 	return elem
 
+def get_nv_from_p(p):
+	thresh = get_kt_dij_avg(p, R=1.3)
+	Dib = 1/(p**2)
+	n = sum(Dib > thresh)
+	return n
+
 # refer to robin's new plan pdf
-def get_kt_dij_avg(nT, P, R=1.0):
+def get_kt_dij_avg(P, R=1.0):
 	A = 1 # 1 because both axes are normalized
+	nT = len(P)
 	median_p = sorted(P)[nT//2]
 	return nT / (A * R ** 2) * (median_p ** -2)
 
 # truth and solution should be of form [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
 def score_clusters(truth, solution):
-	if solution == None:
+	if len(solution) == 0:
+		return 0.0
+	if solution.isnull().any():
 		return 0.0
 	return 100.0 * rand_score(truth, solution)
 	
@@ -41,17 +51,7 @@ def generate_clusters(nt=16, nv=None, std=0.03):
 	p = np.random.rand(num_tracks)
 	p = 1/(p**2 + 0.001) # 3 orders of magnitude diff between min and max. corresponds to: 30 MeV, 30 GeV scaled
 	p /= p.max()
-	# print(p)
-	# n = sum(p > 0.3)
-	# print(n)
-	thresh = get_kt_dij_avg(num_tracks, p, R=1.3)
-	# print(thresh, "kt_dij_avg")
-
-	Dib = 1/(p**2)
-	# print("inverse square momentum", Dib)
-	n = sum(Dib > thresh)
-
-	# print("n", n)
+	n = get_nv_from_p(p)
 
 	if nv is None:
 		if n > 5 or n < 2:
@@ -92,35 +92,29 @@ def generate_clusters(nt=16, nv=None, std=0.03):
 		truth.append(i)
 	# all_zs = np.array(all_zs)
 	# all_thetas = np.array(all_thetas)
-	return (n, all_zs, all_thetas, all_ps, truth)
+	return pd.DataFrame({'z': all_zs, 'theta': all_thetas, 'momentum': all_ps, 'truegroup': truth})
+	# return (n, all_zs, all_thetas, all_ps, truth)
 
 def get_reasonable_sizes_for_plotting_momentum(P):
 	return [500 * p for p in P]
 	# return [50 * p ** 0.25 for p in P]
 
-def plot_clusters(n, all_zs, all_thetas, all_ps, truth):
+def plot_clusters(df, grouping, title):
+	all_zs = df['z']
+	all_thetas = df['theta']
+	all_ps = df['momentum']
+
 	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
-	colors = [palette[i] for i in truth]
+	colors = [palette[i] for i in grouping]
 	scaled = get_reasonable_sizes_for_plotting_momentum(all_ps)
 	# plt.scatter(all_zs, all_thetas, c=all_ps)
 	plt.figure()
-	plt.title("Generated Clusters")
+	plt.title(title)
 	plt.xlabel("Z (normalized)")
 	plt.ylabel("θ (normalized)")
 	plt.grid()
 	for (i, z) in enumerate(all_zs):
 		plt.scatter(z, all_thetas[i], c=colors[i], s=scaled[i], alpha=0.5)
-
-
-# result = generate_clusters()
-# # print(result)
-# plot_clusters(*result)
-
-# (n, all_zs, all_thetas, all_ps, truth) = result
-
-# print(all_zs, len(all_zs))
-# print(all_thetas, len(all_thetas))
-# print(all_ps, len(all_ps))
 
 
 #%%
@@ -152,7 +146,12 @@ def g(m, Dij):
 	# m = 5
 	# return 1 - math.exp(-m*Dij)
 
-def create_qubo(Z, T, P, nT, nV, m = 1):
+def create_qubo(df, m = 1):
+	Z = df['z']
+	T = df['theta']
+	P = df['momentum']
+	nV = get_nv_from_p(P)
+	nT = len(Z)
 
 	qubo = defaultdict(float)
 	Dij_max = 0
@@ -188,69 +187,31 @@ def angle_diff(a, b):
 
 # %%
 
-def plot_solution2(Z, T, P, nT, nV, solution, score=None):
-
-	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
-
-	# print(solution)
-
-	vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps, _ = interpret_solution(Z, T, P, nT, nV, solution)
-
-	if vertex_to_Zs == None: # invalid solution
-		return
-
-	print(vertex_to_Zs)
-	print(vertex_to_Thetas)
-	print(vertex_to_Ps)
-	vertex_to_Ps = [get_reasonable_sizes_for_plotting_momentum(ps) for ps in vertex_to_Ps]
-	plt.figure()
-	if score != None:
-		plt.title(f"Annealer solution, Rand index {score:.1f}%")
-	else:
-		plt.title("Annealer solution")
-	plt.xlabel("Z (normalized)")
-	plt.ylabel("θ (normalized)")
-	plt.grid()
-	for i in range(nV):
-		plt.scatter(vertex_to_Zs[i], vertex_to_Thetas[i], c=palette[i], s=vertex_to_Ps[i], alpha=0.5)
- 
-# %%
-
-def get_solution_from_annealer_response(response):
-	_, _, _, track_to_vertex = interpret_solution(Z, T, P, nT, nV, response.first.sample)
-	return track_to_vertex
-
-
 # returns vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps, track_to_vertex
-def interpret_solution(Z, T, P, nT, nV, solution):
+def set_solution_from_annealer_response(df, response):
+	nT = len(df)
 	track_to_vertex = [None] * nT
+	# nV = get_nv_from_p(df['momentum'])
 
-	for num, bool in solution.items():
+	for num, bool in response.items():
 		if bool == 1:
 			i = num % nT # track number
 			k = num // nT # vertex number
 
 			if track_to_vertex[i] != None:
 				print("Invalid solution! Track assigned to multiple vertices.")
-				return None, None, None, None
+				# track_to_vertex = None
+				df['qagroup'] = None
+				return
 			else:
 				track_to_vertex[i] = k
 	
 	if None in track_to_vertex:
 		print("Invalid solution! Track assigned to no vertex :(")
-		return None, None, None, None
+		track_to_vertex = None
 	
-	print(track_to_vertex)
-
-	vertex_to_Zs = [[] for _ in range(nV)]
-	vertex_to_Thetas = [[] for _ in range(nV)]
-	vertex_to_Ps = [[] for _ in range(nV)]
-	for track, vertex in enumerate(track_to_vertex):
-		vertex_to_Zs[vertex].append(Z[track])
-		vertex_to_Thetas[vertex].append(T[track])
-		vertex_to_Ps[vertex].append(P[track])
-
-	return vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps, track_to_vertex
+	df['qagroup'] = track_to_vertex
+	# df['qagroup'] = track_to_vertex
 
 # %%
 
@@ -259,39 +220,24 @@ if __name__ == "__main__":
 	# empirically 60-64 qubits is pretty much the max you want to use
  	# which means nt * nv <= 60
 
-	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nv=None) # random
-	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=30, nv=2, std=0.05)
-	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=19, nv=3, std=0.05)
-	(n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=15, nv=4, std=0.03)
-	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=12, nv=5, std=0.03)
+	# df = generate_clusters(nv=None)
+	df = generate_clusters(nt=30, nv=2, std=0.05)
+	# df = generate_clusters(nt=18, nv=3, std=0.03)
+	# df = generate_clusters(nt=15, nv=4, std=0.03)
+	# df = generate_clusters(nt=12, nv=5, std=0.03)
+	plot_clusters(df, df['truegroup'], "Generated Clusters")
+	print(df)
 
-	plot_clusters(n, all_zs, all_thetas, all_ps, truth)
+	nv = get_nv_from_p(df['momentum'])
+	nt = len(df)
 
-	print(all_zs, len(all_zs))
-	print(all_thetas, len(all_thetas))
-	print(all_ps, len(all_ps))
+	qubo = create_qubo(df, m=nv-1)
 
-	nT = len(all_zs)
-	nV = n
-	Z = all_zs
-	T = all_thetas
-	P = all_ps
+	# print(qubo)
 
-	qubo = create_qubo(Z, T, P, nT, nV, m=nV-1)
-
-	print(qubo)
 	strength = math.ceil(get_max_coeff(qubo))
 
 	print("Max strength", strength)
-
-	# print("Z =", Z)
-	# print("T =", T)
-	# print("P =", P)
-	# print("nV =", nV)
-	# print("nT =", nT)
-	# print("m =", m)
-
-	# print(nT, nV, m)
 
 	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
 	sampler = EmbeddingComposite(DWaveSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320'))
@@ -318,95 +264,119 @@ if __name__ == "__main__":
 	best = response.first.sample
 	print(best)
 
-	sol = get_solution_from_annealer_response(response)
-	score = score_clusters(truth, sol)
-	plot_solution2(Z, T, P, nT, nV, best, score)
+	set_solution_from_annealer_response(df, best)
+	print(df)
+	score = score_clusters(df['truegroup'], df['qagroup'])
+	if not df['qagroup'].isnull().any():
+		plot_clusters(df, df['qagroup'], f"Annealer solution, Rand index {score:.1f}%")
 	print("Score:", score)
 	
 
+#%%
+
+# R^2 is supposedly 1/pi (?)
+R_squared = None
+group_list = []
+print(df) # just checked to make sure data was in the datagram
+df_momentum = df.sort_values(by='momentum', ascending=False) # sorted values in the datafram
+x = len(df_momentum['momentum']) # finding N value
+x_range = range(1, x+1) # range is x+1 since range doesnt include last number
+y = df_momentum['momentum'] # making array of y values
+# plt.bar(x_range, y) # plotting all y momentum values
+#plt.show()
+# values for inverse squared plot
+y_inverse_square = ((df_momentum['momentum']) ** (-2))
+plt.bar(x_range, y_inverse_square) # plotting the inverse square graph
+plt.show()
+
+# area = np.trapz(y_inverse_square, x_range) # finding the area under the curve using numpys method
+# # print(f"area: {area}")
+# N = 66 # setting our N value = 66
+# delta_avg2 = (area/N) # calculating delta avg squared
+# print(delta_avg2)
+# k1med = np.median(y)
+# print(k1med)
+# avg_dij = np.pi*k1med*delta_avg2 # calculating average dij with out prediction for R^2=1/pi
+# print(avg_dij, "avg_dij")
+
+# returns the distance between two points in cylindrical coordinates
+# assumes rho is 1
+def delta_distance(point_i, point_j):
+    return (angle_diff(point_i['theta'], point_j['theta']) ** 2 + ((point_i['z'] - point_j['z']) ** 2)) ** 0.5
+            
+def calculate_d_ij(particle_i, particle_j):
+    k_ti = particle_i['momentum']
+    k_tj = particle_j['momentum']
+    delta_ij = delta_distance(particle_i, particle_j)
+    d_ij = min(k_ti ** (-2), k_tj ** (-2)) * ((delta_ij ** (2)) / (R_squared))
+    return d_ij
+# Function to sort through groupings of particles according to d_ij
+def sort_pairs_by_d_ij(particles_df):
+    # Create a list of all possible pairs of particles
+    pairs = [(i, j) for i in range(len(particles_df)) for j in range(i+1, len(particles_df))]
+    # Sort pairs by d_ij
+    pairs.sort(key=lambda x: calculate_d_ij(df.iloc[x[0]], df.iloc[x[1]]))
+    return pairs
+
+def anti_kt(particles_df):
+    # initialize groups (each entry assigned an initial group containing only that element)
+    particles_df['ktgroup'] = 0
+    for index, _ in particles_df.iterrows():
+        particles_df.at[index, 'ktgroup'] = index
+    # sort particle groupings by d_ij
+    pairs = sort_pairs_by_d_ij(df)
+    # iterate through sorted pairs
+    for i, j in pairs:
+        particle_i = df.iloc[i]
+        particle_j = df.iloc[j]
+        k_ti = particle_i['momentum']
+        d_ij = calculate_d_ij(particle_i, particle_j)
+        d_iB = k_ti ** (-2)
+        #print(f"d_ij: {d_ij}")
+        #print(f"d_iB: {d_iB}")
+        # Combine when d_ij < d_iB; stop when d_ij >= d_iB (note: not specified which inequality should be inclusive)
+        if (d_ij < d_iB):
+            combine_groups(df, particle_i['ktgroup'], particle_j['ktgroup'])
+        else:
+            print("STOP")
+            break
+def combine_groups(df, group_a, group_b):
+    group_combined = min(group_a, group_b)
+    group_list.append(group_a)
+    group_list.append(group_b)
+    for index, row in df.iterrows():
+        if (row['ktgroup'] == group_a or row['ktgroup'] == group_b):
+            df.at[index, 'ktgroup'] = group_combined
+# option to test values of R_squared for performance
+R_squared_range = np.linspace(1, 0.1, 21)
+scores = []
+for val in R_squared_range:
+    R_squared = val
+    data = df
+    anti_kt(data)
+    num_groups = len(np.unique(data['ktgroup']))
+    scores.append(num_groups)
+print(scores)
+# output for the scores: [27, 27, 27, 27, 27, 27, 27, 343, 343, 343, 512, 512, 512, 1331, 1331, 1331, 4096, 4096, 4913, 10648, 21952]
+# clearly larger values of R_squared give better scores (lower difference from the truth) but only to some point
+#quit()
+# used to plot specific runs
+R_squared = 0.1
+anti_kt(df)
+fig, ax = plt.subplots()
+z = np.array(df['z'])
+theta = np.array(df['theta'])
+c=0
+pmax = max(np.array(df['momentum'])) # used for coloring points based on hardness
+for p in df['momentum']:
+    greyscale = (1-float(p)/pmax)
+    ax.scatter(z[c], theta[c], c=(greyscale, greyscale, greyscale), edgecolors='red') # harder particles should be darker
+    c += 1
+for i, txt in enumerate(np.array(df['ktgroup'])):
+    ax.annotate(txt, (z[i], theta[i]))
+groups = np.array(group_list)
+groups = np.unique(groups)
+print(groups)
+plt.show()
+#combine_groups(df, 2, 3)
 # %%
-
-# Graveyard for relics of the past:
-	# """
-	# Creates a QUBO (Quadratic Unconstrained Binary Optimization) matrix based on the given parameters.
-
-	# Args:
-	# 	Z: A list of track z-positions.
-	# 	deltaZ: A list of track z-position uncertainties.
-	# 	nT (int): The number of tracks.
-	# 	nV (int): The number of vertices.
-	# 	m (float): The parameter used in the distance calculation.
-
-	# Returns:
-	# 	defaultdict: The QUBO matrix representing the optimization problem.
-
-	# Equation:
-	# 	Q_p = ∑ₖⁿᵥ ∑ᵢⁿₜ ∑ⱼⁿₜ₍ᵢ₎ pᵢₖ pⱼₖ g(D(ᵢ, ⱼ); m) 
-	# 		  + λ ∑ᵢⁿₜ (1 - ∑ₖⁿᵥ pᵢₖ)²
-
-	# QUBO Terms:
-	# 	- ∑ₖⁿᵥ ∑ᵢⁿₜ ∑ⱼⁿₜ₍ᵢ₎ pᵢₖ pⱼₖ g(D(ᵢ, ⱼ); m): Represents the pairwise interaction term between tracks and vertices, weighted by the distance function.
-	# 	- λ ∑ᵢⁿₜ (1 - ∑ₖⁿᵥ pᵢₖ)²: Represents the constraint term penalizing the absence of tracks in vertices.
-
-	# Note: The QUBO matrix is represented as a defaultdict with default value 0. The non-zero elements represent the QUBO terms.
-	# Reference: page 3, http://web3.arxiv.org/pdf/1903.08879.pdf
-	# """
-
-	# # one dimensional solution plotter.
-# def plot_solution(Z, nT, nV, solution):
-# 	print(Z)
-# 	plt.figure()
-# 	# plt.hlines(1, min(Z),max(Z))  # Draw a horizontal line
-
-# 	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
-
-# 	print(solution)
-
-# 	track_to_vertex = [None] * nT
-
-# 	for num, bool in solution.items():
-# 		if bool == 1:
-# 			i = num % nT # track number
-# 			k = num // nT # vertex number
-
-# 			if track_to_vertex[i] != None:
-# 				print("Invalid solution! Track assigned to multiple vertices.")
-# 				return
-# 			else:
-# 				track_to_vertex[i] = k
-
-# 	# print(track_to_vertex)
-	
-# 	if None in track_to_vertex:
-# 		print("Invalid solution! Track assigned to no vertex :(")
-# 		return
-
-# 	vertex_to_Zs = [[] for _ in range(nV)]
-# 	for track, vertex in enumerate(track_to_vertex):
-# 		vertex_to_Zs[vertex].append(Z[track])
-
-# 	print(vertex_to_Zs)
-
-# 	# print(len(Z), len(colorlist))
-
-# 	plt.eventplot(vertex_to_Zs, orientation='horizontal', colors=palette[:nV], linewidths=1)
-# 	# plt.axis('off')
-# 	plt.yticks([])
-# 	plt.show()
-
-	# nT = 16
-	# nV = 4
-	# EVT = 9
-	# data_file = f'../clustering_data/{nV}Vertices_{nT}Tracks_100Samples/{nV}Vertices_{nT}Tracks_Event{EVT}/serializedEvents.json'
-	
-	# Z = []
-	# deltaZ = []
-
-	# with open(data_file, 'r') as inputFile:
-	# 	for primary_vertex, tracks in json.load(inputFile):
-	# 		for z, delta_z in tracks:
-	# 			Z.append(z)
-	# 			deltaZ.append(delta_z)
-
-	# qubo = create_qubo(Z, deltaZ, 
-	# 				nT, nV, m = 0.5/(nV**0.5))
