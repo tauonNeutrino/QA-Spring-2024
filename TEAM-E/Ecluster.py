@@ -9,6 +9,7 @@ from dwave.system import LeapHybridSampler, DWaveSampler, EmbeddingComposite
 import dwave.inspector
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics.cluster import rand_score
 
 #%%
 
@@ -17,34 +18,48 @@ def get_rand_from(v):
 	v.remove(elem)
 	return elem
 
+# refer to robin's new plan pdf
+def get_kt_dij_avg(nT, P, R=1.0):
+	A = 1 # 1 because both axes are normalized
+	median_p = sorted(P)[nT//2]
+	return nT / (A * R ** 2) * (median_p ** -2)
+
+# truth and solution should be of form [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+def score_clusters(truth, solution):
+	if solution == None:
+		return 0.0
+	return 100.0 * rand_score(truth, solution)
+	
+
 # maybe base this on https://arxiv.org/pdf/1405.6569.pdf in the future
-def generate_clusters():
+def generate_clusters(nt=16, nv=None, std=0.03):
 
 	z_range = 1 # 0 to 1
 	theta_range = 1 # 0 to 1 (we're acting like we squished the ranges)
-	num_tracks = 20
-
-	stdev = 0.05
+	num_tracks = nt
 
 	p = np.random.rand(num_tracks)
 	p = 1/(p**2 + 0.001) # 3 orders of magnitude diff between min and max. corresponds to: 30 MeV, 30 GeV scaled
 	p /= p.max()
-	print(p)
+	# print(p)
 	# n = sum(p > 0.3)
 	# print(n)
-	thresh = get_kt_dij_avg(num_tracks, p)
+	thresh = get_kt_dij_avg(num_tracks, p, R=1.3)
 	# print(thresh, "kt_dij_avg")
 
 	Dib = 1/(p**2)
 	# print("inverse square momentum", Dib)
 	n = sum(Dib > thresh)
 
-	print("n", n)
+	# print("n", n)
 
-	if n > 5 or n < 2:
-	# if n != 3: # just for now
-		return generate_clusters()
-	
+	if nv is None:
+		if n > 5 or n < 2:
+			return generate_clusters(nt, None, std)
+	else:
+		if n != nv:
+			return generate_clusters(nt, nv, std)
+
 	p = np.sort(p)[::-1].tolist()
 
 	hard_ps = p[:n]
@@ -53,7 +68,8 @@ def generate_clusters():
 	vertex_zs = np.random.rand(n) * z_range
 	vertex_thetas = np.random.rand(n) * theta_range
 
-	points_per_cluster = (num_tracks // n) - 1 # -1 because we're going to add the vertex itself
+	points_per_cluster = num_tracks // n
+	remainder = num_tracks % n
 
 	all_zs = []
 	all_thetas = []
@@ -62,9 +78,12 @@ def generate_clusters():
 	for i in range(n):
 		z = vertex_zs[i]
 		theta = vertex_thetas[i]
-		for j in range(points_per_cluster):
-			all_zs.append(z + np.random.normal(scale=stdev))
-			all_thetas.append((theta + np.random.normal(scale=stdev)) % 1.0) # modulo 1.0 to keep it in the range
+
+		# -1 because we're going to add the vertex itself too
+		toadd = points_per_cluster - 1 + (1 if i < remainder else 0)
+		for j in range(toadd):
+			all_zs.append(z + np.random.normal(scale=std))
+			all_thetas.append((theta + np.random.normal(scale=std)) % 1.0) # modulo 1.0 to keep it in the range
 			all_ps.append(get_rand_from(soft_ps))
 			truth.append(i)
 		all_zs.append(z)
@@ -74,6 +93,10 @@ def generate_clusters():
 	# all_zs = np.array(all_zs)
 	# all_thetas = np.array(all_thetas)
 	return (n, all_zs, all_thetas, all_ps, truth)
+
+def get_reasonable_sizes_for_plotting_momentum(P):
+	return [500 * p for p in P]
+	# return [50 * p ** 0.25 for p in P]
 
 def plot_clusters(n, all_zs, all_thetas, all_ps, truth):
 	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
@@ -89,15 +112,15 @@ def plot_clusters(n, all_zs, all_thetas, all_ps, truth):
 		plt.scatter(z, all_thetas[i], c=colors[i], s=scaled[i], alpha=0.5)
 
 
-result = generate_clusters()
-# print(result)
-plot_clusters(*result)
+# result = generate_clusters()
+# # print(result)
+# plot_clusters(*result)
 
-(n, all_zs, all_thetas, all_ps, truth) = result
+# (n, all_zs, all_thetas, all_ps, truth) = result
 
-print(all_zs, len(all_zs))
-print(all_thetas, len(all_thetas))
-print(all_ps, len(all_ps))
+# print(all_zs, len(all_zs))
+# print(all_thetas, len(all_thetas))
+# print(all_ps, len(all_ps))
 
 
 #%%
@@ -163,25 +186,15 @@ def get_max_coeff(mydict):
 def angle_diff(a, b):
 	return 2*abs((a - b + 0.5) % 1.0 - 0.5) # mult by 2 to make it [0, 1] instead of [0, 0.5]
 
-def get_reasonable_sizes_for_plotting_momentum(P):
-	return [500 * p for p in P]
-	# return [50 * p ** 0.25 for p in P]
-
-# refer to robin's new plan pdf
-def get_kt_dij_avg(nT, P, R=1.0):
-	A = 1 # 1 because both axes are normalized
-	median_p = sorted(P)[nT//2]
-	return nT / (A * R ** 2) * (median_p ** -2)
-
 # %%
 
-def plot_solution2(Z, T, P, nT, nV, solution):
+def plot_solution2(Z, T, P, nT, nV, solution, score=None):
 
 	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
 
 	# print(solution)
 
-	vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps = interpret_solution(Z, T, P, nT, nV, solution)
+	vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps, _ = interpret_solution(Z, T, P, nT, nV, solution)
 
 	if vertex_to_Zs == None: # invalid solution
 		return
@@ -191,7 +204,10 @@ def plot_solution2(Z, T, P, nT, nV, solution):
 	print(vertex_to_Ps)
 	vertex_to_Ps = [get_reasonable_sizes_for_plotting_momentum(ps) for ps in vertex_to_Ps]
 	plt.figure()
-	plt.title("Annealer solution")
+	if score != None:
+		plt.title(f"Annealer solution, Rand index {score:.1f}%")
+	else:
+		plt.title("Annealer solution")
 	plt.xlabel("Z (normalized)")
 	plt.ylabel("θ (normalized)")
 	plt.grid()
@@ -200,6 +216,12 @@ def plot_solution2(Z, T, P, nT, nV, solution):
  
 # %%
 
+def get_solution_from_annealer_response(response):
+	_, _, _, track_to_vertex = interpret_solution(Z, T, P, nT, nV, response.first.sample)
+	return track_to_vertex
+
+
+# returns vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps, track_to_vertex
 def interpret_solution(Z, T, P, nT, nV, solution):
 	track_to_vertex = [None] * nT
 
@@ -210,13 +232,15 @@ def interpret_solution(Z, T, P, nT, nV, solution):
 
 			if track_to_vertex[i] != None:
 				print("Invalid solution! Track assigned to multiple vertices.")
-				return None, None, None
+				return None, None, None, None
 			else:
 				track_to_vertex[i] = k
 	
 	if None in track_to_vertex:
 		print("Invalid solution! Track assigned to no vertex :(")
-		return None, None, None
+		return None, None, None, None
+	
+	print(track_to_vertex)
 
 	vertex_to_Zs = [[] for _ in range(nV)]
 	vertex_to_Thetas = [[] for _ in range(nV)]
@@ -226,12 +250,27 @@ def interpret_solution(Z, T, P, nT, nV, solution):
 		vertex_to_Thetas[vertex].append(T[track])
 		vertex_to_Ps[vertex].append(P[track])
 
-	return vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps
+	return vertex_to_Zs, vertex_to_Thetas, vertex_to_Ps, track_to_vertex
 
 # %%
 
 if __name__ == "__main__":
- 
+	# keep in mind that a large number of qubits results in chain breaks. 
+	# empirically 60-64 qubits is pretty much the max you want to use
+ 	# which means nt * nv <= 60
+
+	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nv=None) # random
+	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=30, nv=2, std=0.05)
+	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=19, nv=3, std=0.05)
+	(n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=15, nv=4, std=0.03)
+	# (n, all_zs, all_thetas, all_ps, truth) = generate_clusters(nt=12, nv=5, std=0.03)
+
+	plot_clusters(n, all_zs, all_thetas, all_ps, truth)
+
+	print(all_zs, len(all_zs))
+	print(all_thetas, len(all_thetas))
+	print(all_ps, len(all_ps))
+
 	nT = len(all_zs)
 	nV = n
 	Z = all_zs
@@ -253,7 +292,6 @@ if __name__ == "__main__":
 	# print("m =", m)
 
 	# print(nT, nV, m)
-
 
 	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
 	sampler = EmbeddingComposite(DWaveSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320'))
@@ -279,7 +317,11 @@ if __name__ == "__main__":
 
 	best = response.first.sample
 	print(best)
-	plot_solution2(Z, T, P, nT, nV, best)
+
+	sol = get_solution_from_annealer_response(response)
+	score = score_clusters(truth, sol)
+	plot_solution2(Z, T, P, nT, nV, best, score)
+	print("Score:", score)
 	
 
 # %%
