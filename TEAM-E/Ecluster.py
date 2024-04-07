@@ -221,8 +221,8 @@ if __name__ == "__main__":
  	# which means nt * nv <= 60
 
 	# df = generate_clusters(nv=None)
-	df = generate_clusters(nt=30, nv=2, std=0.05)
-	# df = generate_clusters(nt=18, nv=3, std=0.03)
+	# df = generate_clusters(nt=20, nv=2, std=0.05)
+	df = generate_clusters(nt=18, nv=3, std=0.03)
 	# df = generate_clusters(nt=15, nv=4, std=0.03)
 	# df = generate_clusters(nt=12, nv=5, std=0.03)
 	plot_clusters(df, df['truegroup'], "Generated Clusters")
@@ -332,8 +332,8 @@ def anti_kt(particles_df):
         k_ti = particle_i['momentum']
         d_ij = calculate_d_ij(particle_i, particle_j)
         d_iB = k_ti ** (-2)
-        #print(f"d_ij: {d_ij}")
-        #print(f"d_iB: {d_iB}")
+        # print(f"d_ij: {d_ij}")
+        # print(f"d_iB: {d_iB}")
         # Combine when d_ij < d_iB; stop when d_ij >= d_iB (note: not specified which inequality should be inclusive)
         if (d_ij < d_iB):
             combine_groups(df, particle_i['ktgroup'], particle_j['ktgroup'])
@@ -355,13 +355,14 @@ for val in R_squared_range:
     data = df
     anti_kt(data)
     num_groups = len(np.unique(data['ktgroup']))
-    scores.append(num_groups)
+    scores.append((R_squared, num_groups))
 print(scores)
 # output for the scores: [27, 27, 27, 27, 27, 27, 27, 343, 343, 343, 512, 512, 512, 1331, 1331, 1331, 4096, 4096, 4913, 10648, 21952]
 # clearly larger values of R_squared give better scores (lower difference from the truth) but only to some point
 #quit()
 # used to plot specific runs
-R_squared = 0.1
+std = 0.03
+R_squared = (std*2)**2 # R is the radius param so a good guess is 2 * stdev
 anti_kt(df)
 fig, ax = plt.subplots()
 z = np.array(df['z'])
