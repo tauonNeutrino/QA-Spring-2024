@@ -11,6 +11,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics.cluster import rand_score
 import pandas as pd
+import random
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
 
 #%%
 
@@ -99,12 +102,47 @@ def get_reasonable_sizes_for_plotting_momentum(P):
 	return [500 * p for p in P]
 	# return [50 * p ** 0.25 for p in P]
 
+def rand_cmap(nlabels, type='bright'):
+	from matplotlib.colors import LinearSegmentedColormap
+	import colorsys
+	import numpy as np
+
+	# Generate color map for bright colors, based on hsv
+	if type == 'bright':
+		randHSVcolors = [(np.random.uniform(low=0.0, high=1),
+						  np.random.uniform(low=0.5, high=1),
+						  np.random.uniform(low=0.5, high=1)) for _ in range(nlabels)]
+
+		# Convert HSV list to RGB
+		randRGBcolors = []
+		for HSVcolor in randHSVcolors:
+			randRGBcolors.append(colorsys.hsv_to_rgb(HSVcolor[0], HSVcolor[1], HSVcolor[2]))
+
+		# random_colormap = LinearSegmentedColormap.from_list('new_map', randRGBcolors, N=nlabels)
+		return randRGBcolors
+	# Generate soft pastel colors
+	if type == 'soft':
+		low = 0.6
+		high = 0.95
+		randRGBcolors = [(np.random.uniform(low=low, high=high),
+						  np.random.uniform(low=low, high=high),
+						  np.random.uniform(low=low, high=high)) for _ in range(nlabels)]
+		# random_colormap = LinearSegmentedColormap.from_list('new_map', randRGBcolors, N=nlabels)
+		return randRGBcolors
+
+# palette = list(mcolors.XKCD_COLORS)
+# palette = cm.tab20(range(20))
+# hsv = plt.get_cmap('hsv')
+# palette = hsv(np.linspace(0, 1.0, 30))
+palette = rand_cmap(30, type='bright')
+# random.shuffle(palette)
+
 def plot_clusters(df, grouping, title):
 	all_zs = df['z']
 	all_thetas = df['theta']
 	all_ps = df['momentum']
 
-	palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
+	# palette = ['b', 'g', 'r', 'c', 'm', 'y'] # 6 is enough
 	colors = [palette[i] for i in grouping]
 	scaled = get_reasonable_sizes_for_plotting_momentum(all_ps)
 	# plt.scatter(all_zs, all_thetas, c=all_ps)
@@ -218,7 +256,7 @@ def set_solution_from_annealer_response(df, response):
 if __name__ == "__main__":
 	# keep in mind that a large number of qubits results in chain breaks. 
 	# empirically 60-64 qubits is pretty much the max you want to use
- 	# which means nt * nv <= 60
+	 # which means nt * nv <= 60
 
 	# df = generate_clusters(nv=None)
 	# df = generate_clusters(nt=20, nv=2, std=0.05)
@@ -255,7 +293,7 @@ if __name__ == "__main__":
 	for sample in response:
 		idx += 1
 		# print("Best Solution:")
-  		# plot_solution2(Z, T, P, nT, nV, sample)
+		  # plot_solution2(Z, T, P, nT, nV, sample)
 		print(sample)
 		# if idx > 5:
 		# 	break
@@ -274,110 +312,83 @@ if __name__ == "__main__":
 
 #%%
 
-# R^2 is supposedly 1/pi (?)
-R_squared = None
-group_list = []
-print(df) # just checked to make sure data was in the datagram
-df_momentum = df.sort_values(by='momentum', ascending=False) # sorted values in the datafram
-x = len(df_momentum['momentum']) # finding N value
-x_range = range(1, x+1) # range is x+1 since range doesnt include last number
-y = df_momentum['momentum'] # making array of y values
-# plt.bar(x_range, y) # plotting all y momentum values
-#plt.show()
-# values for inverse squared plot
-y_inverse_square = ((df_momentum['momentum']) ** (-2))
-plt.bar(x_range, y_inverse_square) # plotting the inverse square graph
-plt.show()
+std = 0.03
+R_squared = (std*1.5)**2 # R is the radius param so a good guess is 2 * stdev
 
-# area = np.trapz(y_inverse_square, x_range) # finding the area under the curve using numpys method
-# # print(f"area: {area}")
-# N = 66 # setting our N value = 66
-# delta_avg2 = (area/N) # calculating delta avg squared
-# print(delta_avg2)
-# k1med = np.median(y)
-# print(k1med)
-# avg_dij = np.pi*k1med*delta_avg2 # calculating average dij with out prediction for R^2=1/pi
-# print(avg_dij, "avg_dij")
+group_list = []
+# print(df) # just checked to make sure data was in the datagram
 
 # returns the distance between two points in cylindrical coordinates
 # assumes rho is 1
 def delta_distance(point_i, point_j):
-    return (angle_diff(point_i['theta'], point_j['theta']) ** 2 + ((point_i['z'] - point_j['z']) ** 2)) ** 0.5
-            
+	return (angle_diff(point_i['theta'], point_j['theta']) ** 2 + ((point_i['z'] - point_j['z']) ** 2)) ** 0.5
+			
 def calculate_d_ij(particle_i, particle_j):
-    k_ti = particle_i['momentum']
-    k_tj = particle_j['momentum']
-    delta_ij = delta_distance(particle_i, particle_j)
-    d_ij = min(k_ti ** (-2), k_tj ** (-2)) * ((delta_ij ** (2)) / (R_squared))
-    return d_ij
+	k_ti = particle_i['momentum']
+	k_tj = particle_j['momentum']
+	delta_ij = delta_distance(particle_i, particle_j)
+	d_ij = min(k_ti ** (-2), k_tj ** (-2)) * ((delta_ij ** (2)) / (R_squared))
+	return d_ij
 # Function to sort through groupings of particles according to d_ij
 def sort_pairs_by_d_ij(particles_df):
-    # Create a list of all possible pairs of particles
-    pairs = [(i, j) for i in range(len(particles_df)) for j in range(i+1, len(particles_df))]
-    # Sort pairs by d_ij
-    pairs.sort(key=lambda x: calculate_d_ij(df.iloc[x[0]], df.iloc[x[1]]))
-    return pairs
+	# Create a list of all possible pairs of particles
+	pairs = [(i, j) for i in range(len(particles_df)) for j in range(i+1, len(particles_df))]
+	# Sort pairs by d_ij
+	pairs.sort(key=lambda x: calculate_d_ij(df.iloc[x[0]], df.iloc[x[1]]))
+	return pairs
 
 def anti_kt(particles_df):
-    # initialize groups (each entry assigned an initial group containing only that element)
-    particles_df['ktgroup'] = 0
-    for index, _ in particles_df.iterrows():
-        particles_df.at[index, 'ktgroup'] = index
-    # sort particle groupings by d_ij
-    pairs = sort_pairs_by_d_ij(df)
-    # iterate through sorted pairs
-    for i, j in pairs:
-        particle_i = df.iloc[i]
-        particle_j = df.iloc[j]
-        k_ti = particle_i['momentum']
-        d_ij = calculate_d_ij(particle_i, particle_j)
-        d_iB = k_ti ** (-2)
-        # print(f"d_ij: {d_ij}")
-        # print(f"d_iB: {d_iB}")
-        # Combine when d_ij < d_iB; stop when d_ij >= d_iB (note: not specified which inequality should be inclusive)
-        if (d_ij < d_iB):
-            combine_groups(df, particle_i['ktgroup'], particle_j['ktgroup'])
-        else:
-            print("STOP")
-            break
+	# initialize groups (each entry assigned an initial group containing only that element)
+	particles_df['ktgroup'] = 0
+	for index, _ in particles_df.iterrows():
+		particles_df.at[index, 'ktgroup'] = index
+	# sort particle groupings by d_ij
+	pairs = sort_pairs_by_d_ij(df)
+	# iterate through sorted pairs
+	for i, j in pairs:
+		particle_i = df.iloc[i]
+		particle_j = df.iloc[j]
+		k_ti = particle_i['momentum']
+		d_ij = calculate_d_ij(particle_i, particle_j)
+		d_iB = k_ti ** (-2)
+		# print(f"d_ij: {d_ij}")
+		# print(f"d_iB: {d_iB}")
+		# Combine when d_ij < d_iB; stop when d_ij >= d_iB (note: not specified which inequality should be inclusive)
+		if (d_ij < d_iB):
+			combine_groups(df, particle_i['ktgroup'], particle_j['ktgroup'])
+		else:
+			print("STOP")
+			break
 def combine_groups(df, group_a, group_b):
-    group_combined = min(group_a, group_b)
-    group_list.append(group_a)
-    group_list.append(group_b)
-    for index, row in df.iterrows():
-        if (row['ktgroup'] == group_a or row['ktgroup'] == group_b):
-            df.at[index, 'ktgroup'] = group_combined
-# option to test values of R_squared for performance
-R_squared_range = np.linspace(1, 0.1, 21)
-scores = []
-for val in R_squared_range:
-    R_squared = val
-    data = df
-    anti_kt(data)
-    num_groups = len(np.unique(data['ktgroup']))
-    scores.append((R_squared, num_groups))
-print(scores)
-# output for the scores: [27, 27, 27, 27, 27, 27, 27, 343, 343, 343, 512, 512, 512, 1331, 1331, 1331, 4096, 4096, 4913, 10648, 21952]
-# clearly larger values of R_squared give better scores (lower difference from the truth) but only to some point
-#quit()
+	group_combined = min(group_a, group_b)
+	group_list.append(group_a)
+	group_list.append(group_b)
+	for index, row in df.iterrows():
+		if (row['ktgroup'] == group_a or row['ktgroup'] == group_b):
+			df.at[index, 'ktgroup'] = group_combined
+
 # used to plot specific runs
-std = 0.03
-R_squared = (std*1.5)**2 # R is the radius param so a good guess is 2 * stdev
 anti_kt(df)
-fig, ax = plt.subplots()
-z = np.array(df['z'])
-theta = np.array(df['theta'])
-c=0
-pmax = max(np.array(df['momentum'])) # used for coloring points based on hardness
-for p in df['momentum']:
-    greyscale = (1-float(p)/pmax)
-    ax.scatter(z[c], theta[c], c=(greyscale, greyscale, greyscale), edgecolors='red') # harder particles should be darker
-    c += 1
-for i, txt in enumerate(np.array(df['ktgroup'])):
-    ax.annotate(txt, (z[i], theta[i]))
-groups = np.array(group_list)
-groups = np.unique(groups)
-print(groups)
-plt.show()
+score = score_clusters(df['truegroup'], df['ktgroup'])
+plot_clusters(df, df['ktgroup'], f"Anti-KT solution, Rand index {score:.1f}%")
+
+# fig, ax = plt.subplots()
+# z = np.array(df['z'])
+# theta = np.array(df['theta'])
+# c=0
+# pmax = max(np.array(df['momentum'])) # used for coloring points based on hardness
+# for p in df['momentum']:
+#     greyscale = (1-float(p)/pmax)
+#     ax.scatter(z[c], theta[c], c=(greyscale, greyscale, greyscale), edgecolors='red') # harder particles should be darker
+#     c += 1
+# for i, txt in enumerate(np.array(df['ktgroup'])):
+#     ax.annotate(txt, (z[i], theta[i]))
+# groups = np.array(group_list)
+# groups = np.unique(groups)
+# print(groups)
+# plt.show()
 #combine_groups(df, 2, 3)
+
+print(df)
+
 # %%
