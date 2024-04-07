@@ -6,3 +6,4 @@ torch==1.12.1
 torchvision==0.13.1
 tqdm==4.64.0
 dwave-ocean-sdk==6.8.0
+mplcyberpunk==0.7.1

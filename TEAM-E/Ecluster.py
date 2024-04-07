@@ -14,6 +14,12 @@ import pandas as pd
 import random
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+import mplcyberpunk
+# plt.style.use("dark_background")
+# plt.style.use("https://github.com/dhaitz/matplotlib-stylesheets/raw/master/pitayasmoothie-dark.mplstyle")
+plt.style.use("cyberpunk")
+# plt.rcParams["font.family"] = "Helvetica"
+plt.rcParams['figure.dpi']=300
 
 #%%
 
@@ -109,9 +115,9 @@ def rand_cmap(nlabels, type='bright'):
 
 	# Generate color map for bright colors, based on hsv
 	if type == 'bright':
-		randHSVcolors = [(np.random.uniform(low=0.0, high=1),
+		randHSVcolors = [((np.random.uniform(low=0.0, high=1)),
 						  np.random.uniform(low=0.7, high=1),
-						  np.random.uniform(low=0.7, high=1)) for _ in range(nlabels)]
+						  np.random.uniform(low=0.9, high=1)) for _ in range(nlabels)]
 
 		# Convert HSV list to RGB
 		randRGBcolors = []
@@ -153,6 +159,7 @@ def plot_clusters(df, grouping, title):
 	plt.grid()
 	for (i, z) in enumerate(all_zs):
 		plt.scatter(z, all_thetas[i], c=colors[i], s=scaled[i], alpha=0.5)
+		# mplcyberpunk.make_scatter_glow()
 
 
 #%%
