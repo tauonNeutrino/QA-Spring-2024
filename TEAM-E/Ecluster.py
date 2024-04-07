@@ -222,8 +222,8 @@ if __name__ == "__main__":
 
 	# df = generate_clusters(nv=None)
 	# df = generate_clusters(nt=20, nv=2, std=0.05)
-	df = generate_clusters(nt=18, nv=3, std=0.03)
-	# df = generate_clusters(nt=15, nv=4, std=0.03)
+	# df = generate_clusters(nt=18, nv=3, std=0.03)
+	df = generate_clusters(nt=15, nv=4, std=0.03)
 	# df = generate_clusters(nt=12, nv=5, std=0.03)
 	plot_clusters(df, df['truegroup'], "Generated Clusters")
 	print(df)
@@ -362,7 +362,7 @@ print(scores)
 #quit()
 # used to plot specific runs
 std = 0.03
-R_squared = (std*2)**2 # R is the radius param so a good guess is 2 * stdev
+R_squared = (std*1.5)**2 # R is the radius param so a good guess is 2 * stdev
 anti_kt(df)
 fig, ax = plt.subplots()
 z = np.array(df['z'])
