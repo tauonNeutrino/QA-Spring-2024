@@ -436,3 +436,100 @@ if __name__ == "__main__":
 
 
 # %%
+
+
+def read_accuracies(std, nv):
+	accuraciesqa = []
+	accuracieskt = []
+	for i in range(10 if std == 0.05 else 15):
+		file = f"../newdata/std05/nv{nv}_{i}.csv" if std == 0.05 else f"../newdata/std03/nv{nv}_{i}.csv"
+		df = pd.read_csv(file)
+		accuraciesqa.append(df['qascore'].mean())
+		accuracieskt.append(df['ktscore'].mean())
+		# print(i)
+	return accuraciesqa, accuracieskt
+
+def plot_accuracies(nv, std):
+	accuraciesqa, accuracieskt = read_accuracies(std, nv)
+	# accuraciesqa = np.mean(accuraciesqa)
+	# accuracieskt = np.mean(accuracieskt)
+	plt.hist([accuraciesqa, accuracieskt], label=['Quantum Annealing', 'Anti-Kt Method'])
+	# plt.hist(accuraciesqa, label='Quantum Annealing', alpha=0.7)
+	# plt.hist(accuracieskt, label='Anti-Kt Method', alpha=0.7)
+	plt.xlabel("Adjusted Rand Index")
+	plt.ylabel("Frequency")
+	plt.title(f"Adjusted Rand Index for {nv} vertices, std={std}")
+	plt.legend()
+	plt.savefig(f"../hist_figs/hist_nv{nv}_std{std}.png")
+	plt.show()
+	
+
+def plot_accuracies_all():
+	allqa = []
+	allkt = []
+	for nv in range(2, 6):
+		for std in [0.03, 0.05]:
+			accuraciesqa, accuracieskt = read_accuracies(std, nv)
+			allqa.extend(accuraciesqa)
+			allkt.extend(accuracieskt)
+	plt.hist([allkt, allqa], label=['Anti-Kt Method', 'Quantum Annealing'])
+	plt.xlabel("Adjusted Rand Index")
+	plt.ylabel("Frequency")
+	plt.title(f"Adjusted Rand Index for all numbers of vertices, all std")
+	plt.legend()
+	plt.savefig(f"../hist_figs/hist_all.png")
+	plt.show()
+
+def plot_accuracies_with_std(std):
+	allqa = []
+	allkt = []
+	for nv in range(2, 6):
+		accuraciesqa, accuracieskt = read_accuracies(std, nv)
+		allqa.extend(accuraciesqa)
+		allkt.extend(accuracieskt)
+	plt.hist([allkt, allqa], label=['Anti-Kt Method', 'Quantum Annealing'])
+	plt.xlabel("Adjusted Rand Index")
+	plt.ylabel("Frequency")
+	plt.title(f"Adjusted Rand Index for all numbers of vertices, std={std}")
+	plt.legend()
+	plt.savefig(f"../hist_figs/hist_std{std}.png")
+	plt.show()
+
+def plot_accuracies_with_nv(nv):
+	allqa = []
+	allkt = []
+	for std in [0.03, 0.05]:
+		accuraciesqa, accuracieskt = read_accuracies(std, nv)
+		allqa.extend(accuraciesqa)
+		allkt.extend(accuracieskt)
+	plt.hist([allkt, allqa], label=['Anti-Kt Method', 'Quantum Annealing'])
+	plt.xlabel("Adjusted Rand Index")
+	plt.ylabel("Frequency")
+	plt.title(f"Adjusted Rand Index for all std, nv={nv}")
+	plt.legend()
+	plt.savefig(f"../hist_figs/hist_nv{nv}.png")
+	plt.show()
+
+# plot_accuracies(0.05, 2)
+plot_accuracies_all()
+
+plot_accuracies_with_std(0.03)
+plot_accuracies_with_std(0.05)
+
+plot_accuracies_with_nv(2)
+plot_accuracies_with_nv(3)
+plot_accuracies_with_nv(4)
+plot_accuracies_with_nv(5)
+
+plot_accuracies(2, 0.03)
+plot_accuracies(2, 0.05)
+
+plot_accuracies(3, 0.03)
+plot_accuracies(3, 0.05)
+
+plot_accuracies(4, 0.03)
+plot_accuracies(4, 0.05)
+
+plot_accuracies(5, 0.03)
+plot_accuracies(5, 0.05)
+# %%
