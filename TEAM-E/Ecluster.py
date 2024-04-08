@@ -9,11 +9,12 @@ from dwave.system import LeapHybridSampler, DWaveSampler, EmbeddingComposite
 import dwave.inspector
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics.cluster import rand_score
+from sklearn.metrics.cluster import rand_score, adjusted_rand_score
 import pandas as pd
 import random
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+import os
 import mplcyberpunk
 # plt.style.use("dark_background")
 # plt.style.use("https://github.com/dhaitz/matplotlib-stylesheets/raw/master/pitayasmoothie-dark.mplstyle")
@@ -47,7 +48,7 @@ def score_clusters(truth, solution):
 		return 0.0
 	if solution.isnull().any():
 		return 0.0
-	return 100.0 * rand_score(truth, solution)
+	return 100.0 * adjusted_rand_score(truth, solution)
 	
 
 # maybe base this on https://arxiv.org/pdf/1405.6569.pdf in the future
@@ -143,7 +144,7 @@ def rand_cmap(nlabels, type='bright'):
 palette = rand_cmap(30, type='bright')
 # random.shuffle(palette)
 
-def plot_clusters(df, grouping, title):
+def plot_clusters(df, grouping, title, saveto=None):
 	all_zs = df['z']
 	all_thetas = df['theta']
 	all_ps = df['momentum']
@@ -160,7 +161,9 @@ def plot_clusters(df, grouping, title):
 	for (i, z) in enumerate(all_zs):
 		plt.scatter(z, all_thetas[i], c=colors[i], s=scaled[i], alpha=0.5)
 		# mplcyberpunk.make_scatter_glow()
-
+	if saveto is not None:
+		plt.savefig(saveto)
+		plt.close() # avoid displaying the plot
 
 #%%
 
@@ -279,7 +282,7 @@ def sort_pairs_by_d_ij(particles_df, R_squared):
 	# Create a list of all possible pairs of particles
 	pairs = [(i, j) for i in range(len(particles_df)) for j in range(i+1, len(particles_df))]
 	# Sort pairs by d_ij
-	pairs.sort(key=lambda x: calculate_d_ij(df.iloc[x[0]], df.iloc[x[1]], R_squared))
+	pairs.sort(key=lambda x: calculate_d_ij(particles_df.iloc[x[0]], particles_df.iloc[x[1]], R_squared))
 	return pairs
 
 def anti_kt(particles_df, R_squared):
@@ -288,11 +291,13 @@ def anti_kt(particles_df, R_squared):
 	for index, _ in particles_df.iterrows():
 		particles_df.at[index, 'ktgroup'] = index
 	# sort particle groupings by d_ij
-	pairs = sort_pairs_by_d_ij(df, R_squared)
+	pairs = sort_pairs_by_d_ij(particles_df, R_squared)
 	# iterate through sorted pairs
 	for i, j in pairs:
-		particle_i = df.iloc[i]
-		particle_j = df.iloc[j]
+		particle_i = particles_df.iloc[i]
+		# print(particle_i)
+		particle_j = particles_df.iloc[j]
+		# print(particle_j)
 		k_ti = particle_i['momentum']
 		d_ij = calculate_d_ij(particle_i, particle_j, R_squared)
 		d_iB = k_ti ** (-2)
@@ -300,83 +305,134 @@ def anti_kt(particles_df, R_squared):
 		# print(f"d_iB: {d_iB}")
 		# Combine when d_ij < d_iB; stop when d_ij >= d_iB (note: not specified which inequality should be inclusive)
 		if (d_ij < d_iB):
-			combine_groups(df, particle_i['ktgroup'], particle_j['ktgroup'])
+			combine_groups(particles_df, particle_i['ktgroup'], particle_j['ktgroup'])
 		else:
-			print("STOP")
+			# print("STOP")
 			break
-def combine_groups(df, group_a, group_b):
+def combine_groups(particles_df, group_a, group_b):
 	group_combined = min(group_a, group_b)
 	group_list.append(group_a)
 	group_list.append(group_b)
-	for index, row in df.iterrows():
+	for index, row in particles_df.iterrows():
 		if (row['ktgroup'] == group_a or row['ktgroup'] == group_b):
-			df.at[index, 'ktgroup'] = group_combined
+			particles_df.at[index, 'ktgroup'] = group_combined
+
+
+def get_data_config_for(nv, std):
+	if nv == 2:
+		return 20, 2, std
+	if nv == 3:
+		return 18, 3, std
+	if nv == 4:
+		return 16, 4, std
+	if nv == 5:
+		return 12, 5, std
+
+def create_dataset():
+	directory = "../newdata/std03"
+	if not os.path.exists(directory):
+		os.makedirs(directory)
+	
+	for i in range(15):
+		for nv in range(2, 6):
+			nt, nv, std = get_data_config_for(nv, 0.03)
+			df = generate_clusters(nt, nv, std)
+			df.to_csv(f"{directory}/nv{nv}_{i}.csv", index=False)
+	
+	directory = "../newdata/std05"
+	if not os.path.exists(directory):
+		os.makedirs(directory)
+
+	for i in range(10):
+		for nv in range(2, 6):
+			nt, nv, std = get_data_config_for(nv, 0.05)
+			df = generate_clusters(nt, nv, std)
+			df.to_csv(f"{directory}/nv{nv}_{i}.csv", index=False)
+
+
+def solve_file(file, std):
+	df = pd.read_csv(file)
+	run_qa(df)
+	qascore = score_clusters(df['truegroup'], df['qagroup'])
+	R_squared = (std*3.0)**2 # R is the radius param so a good guess is 3 * stdev
+	anti_kt(df, R_squared)
+	ktscore = score_clusters(df['truegroup'], df['ktgroup'])
+	df['qascore'] = qascore
+	df['ktscore'] = ktscore
+	print(df)
+	df.to_csv(file, index=False)
+
+def visualize_file(file, out=None):
+	outgen = out + "_gen.png" if out is not None else None
+	outqa = out + "_qa.png" if out is not None else None
+	outkt = out + "_kt.png" if out is not None else None
+	df = pd.read_csv(file)
+	plot_clusters(df, df['truegroup'], "Generated Clusters", saveto=outgen)
+	if not df['qagroup'].isnull().any():
+		qascore = score_clusters(df['truegroup'], df['qagroup'])
+		plot_clusters(df, df['qagroup'], f"Annealer solution, Adj. Rand index {qascore:.1f}%", saveto=outqa)
+	ktscore = score_clusters(df['truegroup'], df['ktgroup'])
+	plot_clusters(df, df['ktgroup'], f"Anti-KT solution, Adj. Rand index {ktscore:.1f}%", saveto=outkt)
+
+def run_qa(df):
+	nv = get_nv_from_p(df['momentum'])
+	qubo = create_qubo(df, m=nv-1)
+	strength = math.ceil(get_max_coeff(qubo))
+	# print("Max strength", strength)
+	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
+	sampler = EmbeddingComposite(DWaveSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320'))
+	# response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
+	response = sampler.sample_qubo(qubo, num_reads=100, chain_strength=strength, annealing_time = 50)
+	best = response.first.sample
+	# print(best)
+	set_solution_from_annealer_response(df, best)
 
 # %%
 
-if __name__ == "__main__":
-	# keep in mind that a large number of qubits results in chain breaks. 
-	# empirically 60-64 qubits is pretty much the max you want to use
-	 # which means nt * nv <= 60
 
+def demo():
 	std = 0.03
 	# df = generate_clusters(nv=None)
-	# df = generate_clusters(nt=20, nv=2, std=std)
-	# df = generate_clusters(nt=18, nv=3, std=std)
-	df = generate_clusters(nt=15, nv=4, std=std)
+	# df = generate_clusters(nt=25, nv=2, std=std)
+	df = generate_clusters(nt=18, nv=3, std=std)
+	# df = generate_clusters(nt=16, nv=4, std=std)
 	# df = generate_clusters(nt=12, nv=5, std=std)
 	plot_clusters(df, df['truegroup'], "Generated Clusters")
 	print(df)
 
-	nv = get_nv_from_p(df['momentum'])
-	nt = len(df)
+	run_qa(df)
 
-	qubo = create_qubo(df, m=nv-1)
-
-	# print(qubo)
-
-	strength = math.ceil(get_max_coeff(qubo))
-
-	print("Max strength", strength)
-
-	#sampler = LeapHybridSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320')
-	sampler = EmbeddingComposite(DWaveSampler(token='DEV-0c064bac1884ffbe99c32c0c572a9390eb918320'))
-	# response = sampler.sample_qubo(qubo, num_reads=50, chain_strength=1200, annealing_time = 2000)
-
-	response = sampler.sample_qubo(qubo, num_reads=100, chain_strength=strength, annealing_time = 50)
-
-	# Show the problem in inspector, to see chain lengths and solution distribution
-	dwave.inspector.show(response)
-
-	print(response)
-
-	idx = 0
-
-	for sample in response:
-		idx += 1
-		# print("Best Solution:")
-		  # plot_solution2(Z, T, P, nT, nV, sample)
-		print(sample)
-		# if idx > 5:
-		# 	break
-		break  # Exit after printing the first sample
-
-	best = response.first.sample
-	print(best)
-
-	set_solution_from_annealer_response(df, best)
 	print(df)
-	score = score_clusters(df['truegroup'], df['qagroup'])
+	qascore = score_clusters(df['truegroup'], df['qagroup'])
 	if not df['qagroup'].isnull().any():
-		plot_clusters(df, df['qagroup'], f"Annealer solution, Rand index {score:.1f}%")
+		plot_clusters(df, df['qagroup'], f"Annealer solution, Adj. Rand index {qascore:.1f}%")
+	
 	# print("Score:", score)
 
-	R_squared = (std*1.5)**2 # R is the radius param so a good guess is 2 * stdev
-
+	R_squared = (std*2.5)**2 # R is the radius param so a good guess is 3 * stdev
 	anti_kt(df, R_squared)
-	score = score_clusters(df['truegroup'], df['ktgroup'])
-	plot_clusters(df, df['ktgroup'], f"Anti-KT solution, Rand index {score:.1f}%")
+	ktscore = score_clusters(df['truegroup'], df['ktgroup'])
+	plot_clusters(df, df['ktgroup'], f"Anti-KT solution, Adj. Rand index {ktscore:.1f}%", saveto="../newdata/kt.png")
 	
 	print(df)
+
+	df['qascore'] = qascore
+	df['ktscore'] = ktscore
+
+	df.to_csv("../newdata/df.csv", index=False)
+
+
+#%%
+if __name__ == "__main__":
+	# demo()
+	
+	for i in range(10):
+		nv = 5
+		file = f"../newdata/std05/nv{nv}_{i}.csv"
+		solve_file(file, 0.05)
+		print(i)
+		# visualize_file(file)
+
+
 
 # %%
