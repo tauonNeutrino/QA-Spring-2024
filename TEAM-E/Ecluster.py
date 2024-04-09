@@ -16,6 +16,7 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import os
 import mplcyberpunk
+from matplotlib import colors
 # plt.style.use("dark_background")
 # plt.style.use("https://github.com/dhaitz/matplotlib-stylesheets/raw/master/pitayasmoothie-dark.mplstyle")
 plt.style.use("cyberpunk")
@@ -424,19 +425,55 @@ def demo():
 
 #%%
 if __name__ == "__main__":
+	pass
 	# demo()
 	
-	for i in range(10):
-		nv = 5
-		file = f"../newdata/std05/nv{nv}_{i}.csv"
-		solve_file(file, 0.05)
-		print(i)
-		# visualize_file(file)
-
-
+	# for i in range(10):
+	# 	nv = 5
+	# 	file = f"../newdata/std05/nv{nv}_{i}.csv"
+	# 	solve_file(file, 0.05)
+	# 	print(i)
+	# 	# visualize_file(file)
 
 # %%
 
+def plot_histograms(data_sets, labels, number_of_bins=10, title="Your Chart's Title"):
+    # print("labels are", labels)
+    # Computed quantities to aid plotting
+    hist_range = (np.min(data_sets), np.max(data_sets))
+    binned_data_sets = [
+        np.histogram(d, range=hist_range, bins=number_of_bins)[0]
+        for d in data_sets
+    ]
+    binned_maximums = np.max(binned_data_sets, axis=1)
+    print("binned_maximums", binned_maximums)
+    x_locations = [np.max(binned_maximums)*i for i in range(len(labels))]
+    # x_locations = np.arange(0, sum(binned_maximums), np.max(binned_maximums))
+    # print("x_locations", x_locations)
+
+    # The bin_edges are the same for all of the histograms
+    bin_edges = np.linspace(hist_range[0], hist_range[1], number_of_bins + 1)
+    heights = np.diff(bin_edges)
+    centers = bin_edges[:-1] + heights / 2
+
+    # Create a figure and axis
+    fig, ax = plt.subplots()
+
+    # Cycle through and plot each histogram
+    for x_loc, binned_data, label in zip(x_locations, binned_data_sets, labels):
+        lefts = x_loc - 0.5 * binned_data
+        ax.barh(centers, binned_data, height=heights, left=lefts, label=label)
+
+    ax.set_xticks(x_locations)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("Adjusted Rand index")
+    ax.set_xlabel("Number of vertices")
+    ax.set_title(title)  # Customize the title here
+    # ax.legend()
+    # plt.show()
+
+
+# %%
 
 def read_accuracies(std, nv):
 	accuraciesqa = []
@@ -510,26 +547,111 @@ def plot_accuracies_with_nv(nv):
 	plt.savefig(f"../hist_figs/hist_nv{nv}.png")
 	plt.show()
 
-# plot_accuracies(0.05, 2)
-plot_accuracies_all()
+def plot_2dhist_qa_by_nv(std):
+	data = []
+	for nv in range(2, 6):
+		accuraciesqa, _ = read_accuracies(std, nv)
+		print("accuraciesqa", accuraciesqa)
+		data.append(accuraciesqa)
+	print(len(data))
+	plot_histograms(data, [f"{nv} vertices" for nv in range(2, 6)], title=f"Adj. Rand index for QA solutions at std={std}")	
+	plt.savefig(f"../hist_figs/hist2d_qa{std}.png")
+	plt.show()
 
-plot_accuracies_with_std(0.03)
-plot_accuracies_with_std(0.05)
+def plot_2dhist_kt_by_nv(std):
+	data = []
+	for nv in range(2, 6):
+		_, accuracieskt = read_accuracies(std, nv)
+		data.append(accuracieskt)
+	print(len(data))
+	plot_histograms(data, [f"{nv} vertices" for nv in range(2, 6)], title=f"Adj. Rand index for Anti-Kt solutions at std={std}")	
+	plt.savefig(f"../hist_figs/hist2d_kt{std}.png")
+	plt.show()
 
-plot_accuracies_with_nv(2)
-plot_accuracies_with_nv(3)
-plot_accuracies_with_nv(4)
-plot_accuracies_with_nv(5)
+plot_2dhist_qa_by_nv(0.03)
+plot_2dhist_qa_by_nv(0.05)
 
-plot_accuracies(2, 0.03)
-plot_accuracies(2, 0.05)
+plot_2dhist_kt_by_nv(0.03)
+plot_2dhist_kt_by_nv(0.05)
 
-plot_accuracies(3, 0.03)
-plot_accuracies(3, 0.05)
+# # nv on x axis
+# # accuracy on y axis
+# x = []
+# y = []
 
-plot_accuracies(4, 0.03)
-plot_accuracies(4, 0.05)
+# for nv in range(2, 6):
+# 	accuraciesqa, accuracieskt = read_accuracies(std, nv)
+# 	x.extend([nv] * len(accuraciesqa))
+# 	y.extend(accuraciesqa)
+# plt.hist2d(x, y, bins=(4, 100)) # cmap='Blues'
 
-plot_accuracies(5, 0.03)
-plot_accuracies(5, 0.05)
+# def plot_hist2d_qa_with_std(std):
+# 	# nv on x axis
+# 	# accuracy on y axis
+# 	x = []
+# 	y = []
+
+# 	for nv in range(2, 6):
+# 		accuraciesqa, accuracieskt = read_accuracies(std, nv)
+# 		x.extend([nv] * len(accuraciesqa))
+# 		y.extend(accuraciesqa)
+# 	plt.hist2d(x, y, bins=[4, 20], norm=colors.LogNorm()) # cmap='Blues'
+# 	plt.colorbar()
+# 	plt.xlabel("Number of Vertices")
+# 	plt.ylabel("Adjusted Rand Index")
+# 	plt.title(f"Accuracy by vertices for QA at std={std}")
+# 	plt.savefig(f"../hist_figs/hist2d_qa{std}.png")
+# 	plt.gca().xaxis.set_major_locator(plt.MultipleLocator(1))
+
+
+	# data = []
+	# for nv in range(2, 6):
+	# 	accuraciesqa, _ = read_accuracies(std, nv)
+	# 	data.append(accuraciesqa)
+	# plt.eventplot(data, orientation='vertical', lineoffsets=[2, 3, 4, 5])
+	# try violin plot
+	# plt.violinplot(data, showmeans=True, showmedians=True)
+
+
+
+
+
+# plot_accuracies_all()
+
+# plot_accuracies_with_std(0.03)
+# plot_accuracies_with_std(0.05)
+
+# plot_accuracies_with_nv(2)
+# plot_accuracies_with_nv(3)
+# plot_accuracies_with_nv(4)
+# plot_accuracies_with_nv(5)
+
+# plot_accuracies(2, 0.03)
+# plot_accuracies(2, 0.05)
+
+# plot_accuracies(3, 0.03)
+# plot_accuracies(3, 0.05)
+
+# plot_accuracies(4, 0.03)
+# plot_accuracies(4, 0.05)
+
+# plot_accuracies(5, 0.03)
+# plot_accuracies(5, 0.05)
+
+# plot_2d_hist_x_is_nv_qa(0.03)
+
+# plot_hist2d_qa_with_std(0.03)
+# %%
+
+
+
+# # Example usage
+# number_of_data_points = 387
+# labels = ["A", "B", "C"]
+# data_sets = [np.random.normal(0, 1, number_of_data_points),
+#              np.random.normal(6, 1, number_of_data_points),
+#              np.random.normal(-3, 1, number_of_data_points)]
+
+# plot_histograms(data_sets, labels, title="Customized Histogram Title")
+
 # %%
