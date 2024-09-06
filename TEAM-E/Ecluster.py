@@ -22,6 +22,7 @@ from matplotlib import colors
 plt.style.use("cyberpunk")
 # plt.rcParams["font.family"] = "Helvetica"
 plt.rcParams['figure.dpi']=300
+plt.rcParams['figure.figsize'] = [2,2]
 
 #%%
 
